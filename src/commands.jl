@@ -1,3 +1,5 @@
+using Printf
+
 """
     auth(password[, username])
 
@@ -364,3 +366,233 @@ Remove one or more members from a sorted set.
 """
 zrem(key, member, members...; client=get_global_client()) = execute(["ZREM", key, member, members...], client)
 
+
+function xack(name::AbstractString, groupname::AbstractString, ids::AbstractString...; client=get_global_client())
+    execute(["XACK", name, groupname, ids...], client)
+end
+
+function xadd(key::AbstractString, members::Union{Nothing,AbstractDict,NamedTuple}=nothing; id::AbstractString="*", maxlen::Union{Integer,Nothing}=nothing, approximate::Bool=false, nomkstream::Bool=false, minid::Union{AbstractString,Nothing}=nothing, limit::Union{Integer,Nothing}=nothing, client=get_global_client(), members_kw...)
+    if members === nothing && isempty(members_kw)
+        throw(ArgumentError("Either `members` or `members_kw...` must be specified"))
+    end
+    command::Vector{Any} = ["XADD", key]
+    if maxlen !== nothing
+        if minid !== nothing
+            throw(ArgumentError("Only one of `maxlen` or `minid` may be specified"))
+        end
+        push!(command, "MAXLEN")
+        if approximate
+            push!(command, "~")
+        end
+        push!(command, @sprintf("%i", maxlen))
+    elseif minid !== nothing
+        push!(command, "MINID")
+        if approximate
+            push!(command, "~")
+        end
+        push!(command, minid)
+    end
+    if limit !== nothing
+        push!(command, "LIMIT", @sprintf("%i", limit))
+    end
+    if nomkstream
+        push!(command, "NOMKSTREAM")
+    end
+    push!(command, id)
+    if members !== nothing
+        append!(command, pairs(members)...)
+    end
+    append!(command, pairs(members_kw)...)
+    execute(command, client)
+end
+
+function xautoclaim(name::AbstractString, groupname::AbstractString, consumername::AbstractString, min_idle_time::Union{Integer,Nothing}=nothing, start_id::Union{AbstractString,Nothing}=nothing, end_id::Union{AbstractString,Nothing}=nothing, count::Union{Integer,Nothing}=nothing, justid::Bool=false, client=get_global_client())
+    command = ["XAUTOCLAIM", name, groupname, consumername]
+    if min_idle_time !== nothing
+        push!(command, "MINIDLETIME", @sprintf("%i", min_idle_time))
+    end
+    if start_id !== nothing
+        push!(command, "START", start_id)
+    end
+    if end_id !== nothing
+        push!(command, "END", end_id)
+    end
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    if justid
+        push!(command, "JUSTID")
+    end
+    execute(command, client)
+end
+
+
+function xclaim(key::AbstractString, groupname::AbstractString, consumername::AbstractString, min_idle_time::Integer, ids::Union{AbstractString,Vector{<:AbstractString}}, idle::Union{Integer,Nothing}=nothing, time::Union{Integer,Nothing}=nothing, retrycount::Union{Integer,Nothing}=nothing, force::Bool=false, justid::Bool=false, client=get_global_client())
+    command = ["XCLAIM", key, groupname, consumername, @sprintf("%i", min_idle_time)]
+    if idle !== nothing
+        push!(command, "IDLE", @sprintf("%i", idle))
+    end
+    if time !== nothing
+        push!(command, "TIME", @sprintf("%i", time))
+    end
+    if retrycount !== nothing
+        push!(command, "RETRYCOUNT", @sprintf("%i", retrycount))
+    end
+    if force
+        push!(command, "FORCE")
+    end
+    if justid
+        push!(command, "JUSTID")
+    end
+    append!(command, ids)
+    execute(command, client)
+end
+
+function xdel(name::AbstractString, ids::Union{AbstractString,Vector{<:AbstractString}}, client=get_global_client())
+    execute(["XDEL", name, ids...], client)
+end
+
+function xgroup_create(key::AbstractString, groupname::AbstractString, id::AbstractString, mkstream::Bool=false, client=get_global_client())
+    # TODO $ instead of ID
+    command = ["XGROUP", "CREATE", key, groupname, id]
+    if mkstream
+        push!(command, "MKSTREAM")
+    end
+    execute(command, client)
+end
+
+function xgroup_delconsumer(key::AbstractString, groupname::AbstractString, consumername::AbstractString, client=get_global_client())
+    execute(["XGROUP", "DELCONSUMER", key, groupname, consumername], client)
+end
+
+function xgroup_destroy(key::AbstractString, groupname::AbstractString, client=get_global_client())
+    execute(["XGROUP", "DESTROY", key, groupname], client)
+end
+
+function xgroup_createconsumer(key::AbstractString, groupname::AbstractString, consumername::AbstractString, client=get_global_client())
+    execute(["XGROUP", "CREATECONSUMER", key, groupname, consumername], client)
+end
+
+function xgroup_setid(key::AbstractString, groupname::AbstractString, id::AbstractString, entries_read::Union{Integer,Nothing}=nothing, client=get_global_client())
+    # TODO $ instead of id?
+    command = ["XGROUP", "SETID", key, groupname, id]
+    if entries_read !== nothing
+        push!(command, "ENTRIESREAD", @sprintf("%i", entries_read))
+    end
+    execute(command, client)
+end
+
+function xinfo_consumers(key::AbstractString, groupname::AbstractString, client=get_global_client())
+    execute(["XINFO", "CONSUMERS", key, groupname], client)
+end
+
+function xinfo_groups(key::AbstractString, client=get_global_client())
+    execute(["XINFO", "GROUPS", key], client)
+end
+
+function xinfo_stream(key::AbstractString, full::Bool=false, count::Union{Integer,Nothing}=nothing, client=get_global_client())
+    command = ["XINFO", "STREAM", key]
+    if full
+        push!(command, "FULL")
+    end
+    # TODO inside full block?
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    execute(command, client)
+end
+
+function xlen(key::AbstractString, client=get_global_client())
+    execute(["XLEN", key], client)
+end
+
+function xpending(key::AbstractString, groupname::AbstractString, start_id::AbstractString="-", end_id::AbstractString="+", count::Union{Integer,Nothing}=nothing, idle::Union{Integer,Nothing}=nothing, consumername::Union{AbstractString,Nothing}=nothing, client=get_global_client())
+    # TODO test without start_id and end_id
+    command = ["XPENDING", key, groupname]
+    if idle !== nothing
+        push!(command, "IDLE", @sprintf("%i", idle))
+    end
+    push!(command, start_id, end_id)
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    if consumername !== nothing
+        push!(command, "CONSUMER", consumername)
+    end
+    execute(command, client)
+end
+
+function xrange(key::AbstractString; start_id::AbstractString="-", end_id::AbstractString="+", count::Union{Integer,Nothing}=nothing, client=get_global_client())
+    command = ["XRANGE", key, start_id, end_id]
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    execute(command, client)
+end
+
+
+function xread(stream_ids::Union{AbstractDict,NamedTuple}, count::Union{Integer,Nothing}=nothing, block::Union{Integer,Nothing}=nothing, client=get_global_client())
+    command::Vector{Any} = ["XREAD"]
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    if block !== nothing
+        push!(command, "BLOCK", @sprintf("%i", block))
+    end
+    push!(command, "STREAMS")
+    append!(command, Base.keys(stream_ids))
+    append!(command, values(stream_ids))
+    execute(command, client)
+end
+
+function xreadgroup(groupname::AbstractString, consumername::AbstractString, stream_ids::Union{AbstractDict,NamedTuple}, count::Union{Integer,Nothing}=nothing, block::Union{Integer,Nothing}=nothing, noack::Bool=false, client=get_global_client())
+    command = ["XREADGROUP", "GROUP", groupname, consumername]
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    if block !== nothing
+        push!(command, "BLOCK", @sprintf("%i", block))
+    end
+    if noack
+        push!(command, "NOACK")
+    end
+    push!(command, "STREAMS")
+    append!(command, Base.keys(stream_ids))
+    append!(command, values(stream_ids))
+    execute(command, client)
+end
+
+function xrevrange(key::AbstractString, end_id::AbstractString="+", start_id::AbstractString="-", count::Union{Integer,Nothing}=nothing, client=get_global_client())
+    command = ["XREVRANGE", key, end_id, start_id]
+    if count !== nothing
+        push!(command, "COUNT", @sprintf("%i", count))
+    end
+    execute(command, client)
+end
+
+function xtrim(key::AbstractString; maxlen::Union{Integer,Nothing}=nothing, minid::Union{AbstractString,Nothing}=nothing, approximate::Bool=false, limit::Union{Integer,Nothing}=nothing, client=get_global_client())
+    if maxlen !== nothing && minid !== nothing
+        throw(ArgumentError("`maxlen` and `minid` cannot be specified together."))
+    end
+    if maxlen === nothing && minid === nothing
+        throw(ArgumentError("Either `maxlen` or `minid` must be specified."))
+    end
+    command = ["XTRIM", key]
+    if maxlen !== nothing
+        push!(command, "MAXLEN")
+    else
+        push!(command, "MINID")
+    end
+    if approximate
+        push!(command, "~")
+    end
+    if maxlen !== nothing
+        push!(command, @sprintf("%i", maxlen))
+    else
+        push!(command, minid)
+    end
+    if limit !== nothing
+        push!(command, "LIMIT", @sprintf("%i", limit))
+    end
+    execute(command, client)
+end

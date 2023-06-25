@@ -1,11 +1,11 @@
 const CRLF = "\r\n"
 
 const RedisType = (
-    simple_string = '+',
-    error = '-',
-    integer = ':',
-    bulk_string = '$',
-    array = '*'
+    simple_string='+',
+    error='-',
+    integer=':',
+    bulk_string='$',
+    array='*'
 )
 
 """
@@ -18,21 +18,19 @@ function resp(command::AbstractArray)
     n = 0
 
     for cmd in command
-        if isempty(cmd)
-            continue
-        end
-        
         if cmd isa AbstractString
             cmd = strip(cmd)
         else
             cmd = string(cmd)
         end
-
+        if isempty(cmd)
+            continue
+        end
         # Need sizeof for non-ascii byte size, length provides char count only
         r *= "$(RedisType.bulk_string)$(sizeof(cmd))$(CRLF)$(cmd)$(CRLF)"
         n += 1
     end
-    
+
     if isempty(r)
         throw(RedisError("ERR", "Non-compliant command $command"))
     end

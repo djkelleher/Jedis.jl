@@ -35,7 +35,7 @@ end
     @test get("key") == "QUEUED"
     @test get("key") == "QUEUED"
     @test exec() == ["OK", "value", "value"]
-    @test ["OK", "value", "value"] == multi_exec() do 
+    @test ["OK", "value", "value"] == multi_exec() do
         set("key", "value")
         get("key")
         get("key")
@@ -91,6 +91,14 @@ end
     @test zrem("testscore", "test1", "test3") == 2
     @test zrange("testscore", 0, -1) == ["test2"]
     flushall()
+end
+
+@testset "STREAM" begin
+    @test xadd("mystream", Dict("a" => 1, "b" => 2))
+    @test xlen("mystream") == 1
+    @test xread("mystream", "0-0") == [["mystream", "1-0", Dict("a" => "1", "b" => "2")]]
+
+
 end
 
 @testset "QUIT" begin

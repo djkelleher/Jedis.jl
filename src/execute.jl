@@ -22,11 +22,11 @@ function execute(command::AbstractArray, client::Client=get_global_client())
         retry!(client)
         write(client.socket, resp(command))
         msg = recv(client.socket)
-        
+
         if msg isa Exception
             throw(msg)
         end
-    
+
         return msg
     end
 end
@@ -120,17 +120,17 @@ function execute(pipe::Pipeline)
             retry!(pipe.client)
             write(pipe.client.socket, join(pipe.resp))
             messages = [recv(pipe.client.socket) for _ in 1:length(pipe.resp)]
-            
+
             if pipe.filter_multi_exec
                 return messages[pipe.multi_exec_bitmask]
             end
-            
+
             return messages
         finally
             flush!(pipe)
         end
     end
-end            
+end
 function execute(pipe::Pipeline, batch_size::Int)
     if pipe.client.is_subscribed
         throw(RedisError("SUBERROR", "Cannot execute Pipeline while a subscription is open in the same Client instance"))
@@ -143,26 +143,26 @@ function execute(pipe::Pipeline, batch_size::Int)
 
             n_cmd = length(pipe.resp)
             messages = Vector{Any}(undef, n_cmd)
-            l, r  = 1, batch_size
-            
+            l, r = 1, batch_size
+
             while l <= n_cmd
                 write(pipe.client.socket, join(pipe.resp[l:min(r, n_cmd)]))
-                
+
                 for i in l:min(r, n_cmd)
                     messages[i] = recv(pipe.client.socket)
                 end
-                
+
                 l += batch_size
                 r += batch_size
             end
-            
+
             if pipe.filter_multi_exec
                 return messages[pipe.multi_exec_bitmask]
             end
-            
+
             return messages
         finally
             flush!(pipe)
         end
     end
-end           
+end
